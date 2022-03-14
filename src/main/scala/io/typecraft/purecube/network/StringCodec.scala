@@ -1,11 +1,11 @@
-package io.typecraft.purecube.codec
+package io.typecraft.purecube.network
 
 import io.netty.buffer.ByteBuf
-import io.typecraft.purecube.codec.VarIntCodec.{readVarInt32, writeVarInt32}
+import io.typecraft.purecube.network.VarIntCodec.{readVarInt32, writeVarInt32}
 
 import java.nio.charset.StandardCharsets
 
-// TODO: NettyCodec[String]
+// NettyCodec[String]?
 object StringCodec {
   def readUTF(buf: ByteBuf): String = {
     val len = readVarInt32(buf)

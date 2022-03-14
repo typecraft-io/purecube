@@ -10,13 +10,11 @@ import io.netty.channel.{
   ChannelInitializer,
   SimpleChannelInboundHandler
 }
-import io.typecraft.purecube.codec.PacketCodec._
-import io.typecraft.purecube.codec.VarIntCodec.{
-  decodeFrame,
-  encodeFrameAlloc,
-  readVarInt32
+import io.typecraft.purecube.network.VarIntCodec.{decodeFrame, encodeFrameAlloc}
+import io.typecraft.purecube.network.handshake.{
+  HandshakePacketCodec,
+  HandshakePacketHandler
 }
-import io.typecraft.purecube.packet._
 
 import java.net.InetSocketAddress
 
@@ -37,12 +35,18 @@ object Main {
                   buf: ByteBuf
               ): Unit = {
                 for {
-                  (packet, response) <- decodeFrame(buf).map(onPacket)
-                  _ = println(s"--> $packet")
-                  (responsePacket, writer) <- response
+                  (inPacketId, inPacket) <- decodeFrame(buf)
+                    .flatMap(HandshakePacketCodec.read)
+                  _ = println(s"--> $inPacket")
+                  (outPacketId, outPacket) <- HandshakePacketHandler
+                    .handle(inPacketId)(inPacket)
                   _ = {
-                    println(s"<-- $responsePacket")
-                    ctx.writeAndFlush(encodeFrameAlloc(writer)(ctx.alloc()))
+                    println(s"<-- $outPacket")
+                    ctx.writeAndFlush(
+                      encodeFrameAlloc(
+                        HandshakePacketCodec.write(_)(outPacketId)(outPacket)
+                      )(ctx.alloc())
+                    )
                   }
                 } yield ()
               }
@@ -56,61 +60,6 @@ object Main {
         e.printStackTrace()
     } finally {
       group.shutdownGracefully().sync
-    }
-  }
-
-  // TODO: ugly return type?
-  def onPacket(
-      buf: ByteBuf
-  ): (Option[Packet], Option[(Packet, ByteBuf => Unit)]) = {
-    val id = readVarInt32(buf)
-    id match {
-      case 0x00 =>
-        val handshake = readHandshake(buf)
-        val response = ResponsePacket(
-          s"""{
-             |    "version": {
-             |        "name": "1.8.7",
-             |        "protocol": ${handshake.protocolVersion}
-             |    },
-             |    "players": {
-             |        "max": 100,
-             |        "online": 5,
-             |        "sample": [
-             |            {
-             |                "name": "thinkofdeath",
-             |                "id": "4566e69f-c907-48ee-8d71-d7ba5aa00d20"
-             |            }
-             |        ]
-             |    },
-             |    "description": {
-             |        "text": "Hello world"
-             |    },
-             |    "favicon": "data:image/png;base64,<data>"
-             |}""".stripMargin
-        )
-        (
-          Some(handshake),
-          Some(
-            (
-              response,
-              writePacket(0x00)(writeResponse(response))
-            )
-          )
-        )
-      case 0x01 =>
-        val ping = readPing(buf)
-        val pong = PongPacket(System.currentTimeMillis())
-        (
-          Some(ping),
-          Some(
-            (
-              pong,
-              writePacket(0x01)(writePong(pong))
-            )
-          )
-        )
-      case _ => (None, None)
     }
   }
 }

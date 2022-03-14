@@ -1,4 +1,4 @@
-package io.typecraft.purecube.codec
+package io.typecraft.purecube.network
 
 import io.netty.buffer.{ByteBuf, ByteBufAllocator}
 
@@ -21,7 +21,9 @@ object VarIntCodec {
     }
   }
 
-  def encodeFrameAlloc(writer: ByteBuf => Unit)(alloc: ByteBufAllocator): ByteBuf = {
+  def encodeFrameAlloc(
+      writer: ByteBuf => Unit
+  )(alloc: ByteBufAllocator): ByteBuf = {
     val data = alloc.ioBuffer()
     writer(data)
     val frame = alloc.ioBuffer()
@@ -107,6 +109,6 @@ object VarIntCodec {
     if ((value & (0xffffffff << 14)) == 0) return 2
     if ((value & (0xffffffff << 21)) == 0) return 3
     if ((value & (0xffffffff << 28)) == 0) return 4
-    return 5
+    5
   }
 }
