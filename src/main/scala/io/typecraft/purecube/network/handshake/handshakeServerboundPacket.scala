@@ -23,15 +23,3 @@ object HandshakePacket {
     readVarInt32(buf)
   )
 }
-
-case class PingPacket(
-    millis: Long
-) extends HandshakeServerboundPacket
-
-object PingPacket {
-  val id: Int = 0x01
-
-  def read(buf: ByteBuf): PingPacket = PingPacket(
-    buf.readLong()
-  )
-}

@@ -10,15 +10,20 @@ import io.netty.channel.{
   ChannelInitializer,
   SimpleChannelInboundHandler
 }
-import io.typecraft.purecube.network.VarIntCodec.{decodeFrame, encodeFrameAlloc}
-import io.typecraft.purecube.network.handshake.{
-  HandshakePacketCodec,
-  HandshakePacketHandler
+import io.netty.handler.codec.protobuf.{
+  ProtobufVarint32FrameDecoder,
+  ProtobufVarint32LengthFieldPrepender
 }
+import io.netty.util.AttributeKey
+import io.typecraft.purecube.network.PacketHandler
 
 import java.net.InetSocketAddress
 
 object Main {
+
+  /*
+  https://wiki.vg/Protocol#Login
+   */
   def main(args: Array[String]): Unit = {
     val group = new NioEventLoopGroup()
     try {
@@ -29,26 +34,14 @@ object Main {
       bootstrap.childHandler(new ChannelInitializer[SocketChannel] {
         override def initChannel(ch: SocketChannel): Unit = {
           ch.pipeline()
+            .addLast(new ProtobufVarint32FrameDecoder())
+            .addLast(new ProtobufVarint32LengthFieldPrepender())
             .addLast(new SimpleChannelInboundHandler[ByteBuf] {
               override def channelRead0(
                   ctx: ChannelHandlerContext,
                   buf: ByteBuf
               ): Unit = {
-                for {
-                  (inPacketId, inPacket) <- decodeFrame(buf)
-                    .flatMap(HandshakePacketCodec.read)
-                  _ = println(s"--> $inPacket")
-                  (outPacketId, outPacket) <- HandshakePacketHandler
-                    .handle(inPacketId)(inPacket)
-                  _ = {
-                    println(s"<-- $outPacket")
-                    ctx.writeAndFlush(
-                      encodeFrameAlloc(
-                        HandshakePacketCodec.write(_)(outPacketId)(outPacket)
-                      )(ctx.alloc())
-                    )
-                  }
-                } yield ()
+                PacketHandler.handle(buf)(ctx)
               }
             })
         }
